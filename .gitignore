@@ -1,0 +1,13 @@
+bin/
+obj/
+TestResults/
+release/
+publish/
+graphify-out/
+%SystemDrive%/
+.vs/
+*.user
+*.suo
+*.pfx
+*.p12
+.env

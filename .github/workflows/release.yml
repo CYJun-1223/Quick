@@ -1,0 +1,80 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.300
+
+      - name: Restore
+        run: |
+          dotnet restore tests/Quick.Tests/Quick.Tests.csproj --runtime win-x64
+          dotnet restore Quick.csproj --runtime win-x64
+
+      - name: Verify application
+        run: |
+          dotnet test tests/Quick.Tests/Quick.Tests.csproj --configuration Release --no-restore
+          dotnet run --project Quick.csproj --configuration Release --no-build --no-restore -- --self-test
+
+      - name: Publish portable build
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          $version = $env:RELEASE_TAG.TrimStart('v')
+          dotnet publish Quick.csproj --configuration Release --no-restore -p:PublishProfile=Portable "-p:Version=$version"
+          Compress-Archive -Path release/Quick-portable/* -DestinationPath "release/Quick-$version-portable-win-x64.zip"
+
+      - name: Build installer package
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          $version = $env:RELEASE_TAG.TrimStart('v')
+          .\packaging\Build-Setup.ps1 -Version $version -SmokeTest
+
+      - name: Publish GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          $version = $env:RELEASE_TAG.TrimStart('v')
+          $assets = @(Get-ChildItem -File -LiteralPath 'release/Quick-installer' |
+            Where-Object { $_.Name -ne 'Quick-win-Portable.zip' } |
+            ForEach-Object { $_.FullName })
+          $assets += (Resolve-Path "release/Quick-$version-portable-win-x64.zip").Path
+          $releaseArguments = @(
+            'release',
+            'create',
+            $env:RELEASE_TAG
+          ) + $assets + @(
+            '--repo',
+            $env:GITHUB_REPOSITORY,
+            '--title',
+            "Quick $version",
+            '--generate-notes'
+          )
+          if ($version.Contains('-')) {
+            $releaseArguments += '--prerelease'
+          }
+
+          & gh @releaseArguments
+          if ($LASTEXITCODE -ne 0) {
+            throw 'GitHub Release creation failed.'
+          }
