@@ -783,17 +783,8 @@ internal sealed partial class LauncherForm : Form
             return;
         }
 
-        _editorResizeTimer.Stop();
-        _editorExpanded = false;
-        _input.ScrollBars = ScrollBars.None;
-        _targetEditorHeight = SingleLineEditorHeight;
-        _editorHeight = SingleLineEditorHeight;
-        ApplyEditorLayout();
-        ApplyRoundedCorners();
+        // Keep text, editor size and feature selection so the next open shows the last state.
         Hide();
-        _input.Clear();
-        QueueEditorResize();
-        UpdateResult();
     }
 
     private void UpdateResult()
