@@ -68,6 +68,9 @@ internal sealed partial class LauncherForm : Form
     private int _selectedFeatureIndex;
     private CodexUsageSnapshot? _codexUsageCache;
     private bool _codexRefreshInFlight;
+    private readonly InputHistory _history = new();
+    private string? _calculationResult;
+    private bool _toolFocus;
 
     public LauncherForm()
     {
@@ -145,14 +148,54 @@ internal sealed partial class LauncherForm : Form
     {
         if (keyData == Keys.Escape)
         {
-            HideLauncher();
+            // Esc leaves the tool list first; a second Esc closes.
+            if (_toolFocus)
+            {
+                SetToolFocus(false);
+            }
+            else
+            {
+                HideLauncher();
+            }
+
             return true;
         }
 
-        if (_input.TextLength == 0 && keyData is Keys.Up or Keys.Down)
+        // Tab moves to the tool list; the list is left with Esc, so Shift+Tab does nothing.
+        if (keyData == Keys.Tab)
         {
-            MoveFeature(keyData == Keys.Down ? 1 : -1);
+            SetToolFocus(true);
             return true;
+        }
+
+        if (keyData == (Keys.Tab | Keys.Shift))
+        {
+            return true;
+        }
+
+        if (keyData is Keys.Up or Keys.Down)
+        {
+            var delta = keyData == Keys.Down ? 1 : -1;
+            if (_toolFocus)
+            {
+                MoveFeature(delta);
+                return true;
+            }
+
+            // Up/Down walk input history; in multi-line text they move the caret until it
+            // reaches the first (Up) or last (Down) line. With no history yet, an empty input switches tool.
+            if (CaretOnEdgeLine(delta) && _history.TryMove(_input.Text, delta, out var state))
+            {
+                // Land on the edge the next press continues from.
+                SetInputText(state, caretAtStart: delta < 0 && state.Contains('\n'));
+                return true;
+            }
+
+            if (_input.TextLength == 0 && !_history.HasStates)
+            {
+                MoveFeature(delta);
+                return true;
+            }
         }
 
         return base.ProcessCmdKey(ref msg, keyData);
@@ -210,8 +253,11 @@ internal sealed partial class LauncherForm : Form
         _input.Font = new Font("Segoe UI", 19f, FontStyle.Regular);
         _input.PlaceholderText = "Search or type a command...";
         _input.MaxLength = 250;
+        _input.MouseDown += (_, _) => SetToolFocus(false);
         _input.TextChanged += (_, _) =>
         {
+            // Typing, deleting or pasting while the tool list is focused goes to the input.
+            SetToolFocus(false);
             UpdateInputPlaceholder();
             UpdateResult();
             QueueEditorResize();
@@ -222,8 +268,9 @@ internal sealed partial class LauncherForm : Form
         _input.MouseWheel += (_, e) => _editorScrollbar.ScrollFromWheel(e.Delta);
         topBar.Controls.Add(_input);
 
-        _inputPlaceholder.Location = new Point(20, 10);
-        _inputPlaceholder.Size = new Size(660, SingleLineEditorHeight);
+        // Starts right of the input's left edge so the caret stays visible beside the placeholder, like a web input.
+        _inputPlaceholder.Location = new Point(30, 10);
+        _inputPlaceholder.Size = new Size(650, SingleLineEditorHeight);
         _inputPlaceholder.AutoEllipsis = true;
         _inputPlaceholder.BackColor = topBar.BackColor;
         _inputPlaceholder.ForeColor = Color.FromArgb(126, 120, 136);
@@ -511,6 +558,11 @@ internal sealed partial class LauncherForm : Form
         }
 
         e.SuppressKeyPress = true;
+        if (_toolFocus)
+        {
+            return;
+        }
+
         if (e.Shift)
         {
             _editorExpanded = true;
@@ -518,7 +570,51 @@ internal sealed partial class LauncherForm : Form
             _input.SelectedText = Environment.NewLine;
             QueueEditorResize();
             _input.ScrollToCaret();
+            return;
         }
+
+        CopyResultIntoInput();
+    }
+
+    // Enter on a calculation: copy the result and make it the new input; Up goes back to the expression.
+    private void CopyResultIntoInput()
+    {
+        // Only while the Calculator panel is showing; after switching tool Enter does nothing.
+        if (_calculationResult is not { } result || _selectedFeatureIndex != 0)
+        {
+            return;
+        }
+
+        try
+        {
+            Clipboard.SetText(result);
+        }
+        catch (ExternalException)
+        {
+            _hint.Text = "Could not copy: the clipboard is in use";
+            return;
+        }
+
+        _history.Commit(_input.Text);
+        _history.Commit(result);
+        SetInputText(result);
+        _hint.Text = "Copied to clipboard";
+    }
+
+    private void SetInputText(string text, bool caretAtStart = false)
+    {
+        _editorExpanded = text.Contains('\n');
+        _input.Text = text;
+        _input.SelectionStart = caretAtStart ? 0 : text.Length;
+    }
+
+    private bool CaretOnEdgeLine(int delta)
+    {
+        var text = _input.Text;
+        var caret = _input.SelectionStart;
+        return delta < 0
+            ? text.IndexOf('\n') is var firstBreak && (firstBreak < 0 || caret <= firstBreak)
+            : caret > text.LastIndexOf('\n');
     }
 
     private void QueueEditorResize()
@@ -759,13 +855,16 @@ internal sealed partial class LauncherForm : Form
     private void ShowLauncher()
     {
         CenterOnCurrentScreen();
+        ActiveControl = _input;
         Show();
         WindowState = FormWindowState.Normal;
         TopMost = true;
         Activate();
         SetForegroundWindow(Handle);
         _input.Focus();
-        _input.SelectAll();
+        SetToolFocus(false);
+        // A selection hides the caret, so park it at the end of the kept text.
+        _input.Select(_input.TextLength, 0);
     }
 
     private void CenterOnCurrentScreen()
@@ -790,6 +889,7 @@ internal sealed partial class LauncherForm : Form
     private void UpdateResult()
     {
         var text = _input.Text.Trim();
+        _calculationResult = null;
 
         if (text.Length == 0)
         {
@@ -818,7 +918,8 @@ internal sealed partial class LauncherForm : Form
         if (ExpressionEvaluator.TryEvaluateScript(text, out var value))
         {
             SetMode("Calculator", "∑");
-            _result.Text = FormatCalculatorNumber(value);
+            _calculationResult = FormatCalculatorNumber(value);
+            _result.Text = _calculationResult;
             _result.ForeColor = Color.FromArgb(245, 241, 235);
             _hint.Text = string.Empty;
             return;
@@ -846,6 +947,37 @@ internal sealed partial class LauncherForm : Form
         _hint.Text = $"{FormatCurrency(query.Amount)} {query.From} → {query.To}";
     }
 
+    private void ApplyToolRowColors()
+    {
+        var selected = _toolFocus ? Color.FromArgb(84, 66, 112) : Color.FromArgb(48, 41, 58);
+        var normal = Color.FromArgb(20, 17, 22);
+        _calculatorRow.BackColor = _selectedFeatureIndex == 0 ? selected : normal;
+        _exchangeRow.BackColor = _selectedFeatureIndex == 1 ? selected : normal;
+        _codexRow.BackColor = _selectedFeatureIndex == 2 ? selected : normal;
+    }
+
+    // Focus on the tool list is virtual: the input keeps real focus (so typing still lands in it)
+    // and only its caret is hidden while the list is active.
+    private void SetToolFocus(bool on)
+    {
+        if (_toolFocus == on)
+        {
+            return;
+        }
+
+        _toolFocus = on;
+        if (on)
+        {
+            HideCaret(_input.Handle);
+        }
+        else
+        {
+            ShowCaret(_input.Handle);
+        }
+
+        ApplyToolRowColors();
+    }
+
     private void SetMode(string mode, string icon)
     {
         _mode.Text = mode;
@@ -857,11 +989,7 @@ internal sealed partial class LauncherForm : Form
             _ => 0
         };
 
-        var selected = Color.FromArgb(48, 41, 58);
-        var normal = Color.FromArgb(20, 17, 22);
-        _calculatorRow.BackColor = _selectedFeatureIndex == 0 ? selected : normal;
-        _exchangeRow.BackColor = _selectedFeatureIndex == 1 ? selected : normal;
-        _codexRow.BackColor = _selectedFeatureIndex == 2 ? selected : normal;
+        ApplyToolRowColors();
         _codexUsageView.Visible = _selectedFeatureIndex == 2;
         if (_selectedFeatureIndex == 2)
         {
@@ -1002,6 +1130,12 @@ internal sealed partial class LauncherForm : Form
 
     [DllImport("user32.dll")]
     private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern bool HideCaret(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern bool ShowCaret(IntPtr hWnd);
 
     [DllImport("user32.dll")]
     private static extern bool ReleaseCapture();
