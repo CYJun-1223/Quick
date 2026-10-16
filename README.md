@@ -36,9 +36,11 @@ The default shortcut is `Alt + Space`.
 
 1. Type a calculation, such as `5603 * 2.7%`.
 2. Type a conversion, such as `100 USD to MYR`.
-3. With an empty input, press `Up` or `Down` to switch between Calculator, Exchange rate, and Codex usage.
-4. Press `Shift + Enter` to expand the editor for a multiline expression.
-5. Press `Esc` to close the launcher.
+3. Press `Enter` on a calculation to copy the result and replace the input with it.
+4. Press `Up` or `Down` to step through earlier and later inputs.
+5. Press `Tab` to move to the tool list, then `Up` or `Down` to switch between Calculator, Exchange rate, and Codex usage. Typing, or `Esc`, returns to the input.
+6. Press `Shift + Enter` to expand the editor for a multiline expression.
+7. Press `Esc` to close the launcher.
 
 Open the tray icon menu and choose **Settings…** to change the shortcut, enable launch at Windows startup, or enable automatic updates for installed builds.
 

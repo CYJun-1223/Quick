@@ -6,8 +6,6 @@ internal sealed class InputHistory
     private readonly List<string> _states = [];
     private int _index = -1;
 
-    public bool HasStates => _states.Count > 0;
-
     /// <summary>Records <paramref name="state"/> right after the current one unless it is already current.</summary>
     public void Commit(string state)
     {

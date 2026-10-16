@@ -19,6 +19,8 @@ internal sealed partial class LauncherForm : Form
     // ponytail: 60s polling avoids a long-lived app-server connection.
     // Upgrade to account/rateLimits/updated for true realtime updates.
     private const int CodexRefreshIntervalMs = 60_000;
+    private const string FooterInput = "Tab   Tools      Esc   Close";
+    private const string FooterTools = "↑ ↓   Switch tool      Esc   Back";
     private const string RateUrl = "https://open.er-api.com/v6/latest/MYR";
 
     private static readonly HttpClient Http = CreateHttpClient();
@@ -183,17 +185,11 @@ internal sealed partial class LauncherForm : Form
             }
 
             // Up/Down walk input history; in multi-line text they move the caret until it
-            // reaches the first (Up) or last (Down) line. With no history yet, an empty input switches tool.
+            // reaches the first (Up) or last (Down) line.
             if (CaretOnEdgeLine(delta) && _history.TryMove(_input.Text, delta, out var state))
             {
                 // Land on the edge the next press continues from.
                 SetInputText(state, caretAtStart: delta < 0 && state.Contains('\n'));
-                return true;
-            }
-
-            if (_input.TextLength == 0 && !_history.HasStates)
-            {
-                MoveFeature(delta);
                 return true;
             }
         }
@@ -359,10 +355,10 @@ internal sealed partial class LauncherForm : Form
         resultSurface.Controls.Add(_codexUsageView);
 
         _footer.Location = new Point(28, 388);
-        _footer.Size = new Size(220, 18);
+        _footer.Size = new Size(300, 18);
         _footer.ForeColor = Color.FromArgb(126, 120, 130);
         _footer.Font = new Font("Segoe UI", 8.5f);
-        _footer.Text = "Esc   Close";
+        _footer.Text = FooterInput;
 
         Controls.AddRange([topBar, toolPane, resultSurface, _footer, _logo]);
 
@@ -966,6 +962,7 @@ internal sealed partial class LauncherForm : Form
         }
 
         _toolFocus = on;
+        _footer.Text = on ? FooterTools : FooterInput;
         if (on)
         {
             HideCaret(_input.Handle);
