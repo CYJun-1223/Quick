@@ -10,6 +10,8 @@ internal sealed class QuickUpdateService
 
     internal bool IsInstalled => _manager.IsInstalled;
 
+    internal string CurrentVersion => _manager.CurrentVersion?.ToString() ?? "unknown";
+
     internal Task<UpdateInfo?> CheckForUpdatesAsync() => _manager.CheckForUpdatesAsync();
 
     internal async Task DownloadAndRestartAsync(UpdateInfo update, CancellationToken cancellationToken)

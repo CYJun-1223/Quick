@@ -94,6 +94,7 @@ internal sealed partial class LauncherForm : Form
         var menu = new ContextMenuStrip();
         menu.Items.Add("Open Quick", null, (_, _) => ShowLauncher());
         menu.Items.Add("Settings…", null, (_, _) => ShowShortcutSettings());
+        menu.Items.Add("Check for updates…", null, async (_, _) => await CheckForUpdatesAsync(manual: true));
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Quit", null, (_, _) => Close());
 

@@ -21,9 +21,20 @@ internal sealed partial class LauncherForm
         _ = CheckForUpdatesAsync();
     }
 
-    private async Task CheckForUpdatesAsync()
+    // manual = the tray menu item: ignores the automatic setting and always reports the outcome.
+    private async Task CheckForUpdatesAsync(bool manual = false)
     {
-        if (_updateCheckInFlight || !QuickSettingsStore.IsAutoUpdateEnabled())
+        if (_updateCheckInFlight)
+        {
+            if (manual)
+            {
+                ShowUpdateMessage("Quick is already checking for updates.", MessageBoxIcon.Information);
+            }
+
+            return;
+        }
+
+        if (!manual && !QuickSettingsStore.IsAutoUpdateEnabled())
         {
             return;
         }
@@ -33,6 +44,11 @@ internal sealed partial class LauncherForm
         {
             if (!_updateService.IsInstalled)
             {
+                if (manual)
+                {
+                    ShowUpdateMessage("Updates need the installed version of Quick.", MessageBoxIcon.Information);
+                }
+
                 return;
             }
 
@@ -43,11 +59,21 @@ internal sealed partial class LauncherForm
             }
             catch
             {
+                if (manual)
+                {
+                    ShowUpdateMessage("Quick could not check for updates. Please try again later.", MessageBoxIcon.Warning);
+                }
+
                 return;
             }
 
             if (update is null)
             {
+                if (manual)
+                {
+                    ShowUpdateMessage($"Quick {_updateService.CurrentVersion} is the latest version.", MessageBoxIcon.Information);
+                }
+
                 return;
             }
 
@@ -71,12 +97,7 @@ internal sealed partial class LauncherForm
             }
             catch
             {
-                MessageBox.Show(
-                    this,
-                    "Quick could not install the update. Please try again later.",
-                    "Quick update",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning);
+                ShowUpdateMessage("Quick could not install the update. Please try again later.", MessageBoxIcon.Warning);
             }
         }
         finally
@@ -84,4 +105,7 @@ internal sealed partial class LauncherForm
             _updateCheckInFlight = false;
         }
     }
+
+    private void ShowUpdateMessage(string text, MessageBoxIcon icon) =>
+        MessageBox.Show(this, text, "Quick update", MessageBoxButtons.OK, icon);
 }

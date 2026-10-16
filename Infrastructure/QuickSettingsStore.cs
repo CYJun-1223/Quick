@@ -113,7 +113,8 @@ internal static class QuickSettingsStore
         try
         {
             using var settings = Registry.CurrentUser.OpenSubKey(SettingsRegistryPath);
-            return settings?.GetValue(AutoUpdateValueName) is int value && value != 0;
+            // On unless the user turned it off; an unreadable registry stays off.
+            return settings?.GetValue(AutoUpdateValueName) is not int value || value != 0;
         }
         catch
         {

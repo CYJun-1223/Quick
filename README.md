@@ -75,7 +75,7 @@ The local installer is written to `release/Quick-installer/Quick-win-Setup.exe`.
 
 Add `-SmokeTest` to install the generated package into a temporary directory, run the packaged self-check, and verify Velopack uninstall before sharing it.
 
-The installed build checks the public GitHub Releases feed at startup and every 24 hours when **Check for updates automatically** is enabled in Settings. If a newer release is found, Quick asks before downloading it and restarting. Portable builds do not offer this option because their executable can be moved after download. A public GitHub release must exist before updates can be found.
+The installed build checks the public GitHub Releases feed at startup and every 24 hours; **Check for updates automatically** in Settings is on by default and can be turned off. Choose **Check for updates…** in the tray icon menu to check on demand; it always shows the result. If a newer release is found, Quick asks before downloading it and restarting. Portable builds do not offer this option because their executable can be moved after download. A public GitHub release must exist before updates can be found.
 
 Pushing a tag such as `v0.1.0-dev.1` (development) or `v0.1.0` (stable) runs `.github/workflows/release.yml`, verifies the application, packages the installer, creates a portable zip, and publishes all assets to that GitHub Release. Versions containing `-` are marked as GitHub prereleases. The repository may remain private during development, but the in-app updater intentionally has no embedded token and cannot read private releases.
 
